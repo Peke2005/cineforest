@@ -47,6 +47,8 @@ def info() -> dict:
         "categories": meta["categories"],
         "feature_importances": meta["feature_importances"][:10],
         "n_trees": bot.random_forest.n_estimators,
+        "class_distribution": meta["class_distribution"],
+        "posters": bot.poster_wall(),
     }
 
 

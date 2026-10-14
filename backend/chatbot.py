@@ -70,7 +70,51 @@ protagonizada reparto filmografia informacion info datos ficha sinopsis argument
 nota puntuacion ano anos salio dura duracion predice prediccion predecir clasifica calidad modelo random forest
 categoria buena mala segun recomiendame recomienda recomiendas similares similar como quiero ver sugiereme
 comentarios comentada comentadas obras trabaja hizo sobre acerca imdb hay cuanta the
+peli pelis film films serie series tal bueno buenas buenos larga largas largo cortas corta antiguas antigua
+recientes reciente nuevas nueva populares votadas famosas conocidas puedes hacer haces sabes ver quiero
+recomendar algun alguna esa ese eso mas menos todas todos
 """.split())
+
+SPANISH_TITLES = {
+    "el padrino": "the godfather", "el padrino 2": "the godfather part ii", "cadena perpetua": "the shawshank redemption",
+    "el club de la lucha": "fight club", "el caballero oscuro": "the dark knight", "origen": "inception",
+    "el senor de los anillos": "the lord of the rings the fellowship of the ring", "la comunidad del anillo": "the lord of the rings the fellowship of the ring",
+    "el retorno del rey": "the lord of the rings the return of the king", "las dos torres": "the lord of the rings the two towers",
+    "la guerra de las galaxias": "star wars episode iv - a new hope", "el imperio contraataca": "star wars episode v - the empire strikes back",
+    "el rey leon": "the lion king", "regreso al futuro": "back to the future", "tiburon": "jaws", "psicosis": "psycho",
+    "el resplandor": "the shining", "la lista de schindler": "schindler's list", "salvar al soldado ryan": "saving private ryan",
+    "el silencio de los corderos": "the silence of the lambs", "lo que el viento se llevo": "gone with the wind",
+    "ciudadano kane": "citizen kane", "buscando a nemo": "finding nemo", "parque jurasico": "jurassic park",
+    "el exorcista": "the exorcist", "la vida es bella": "life is beautiful", "los vengadores": "the avengers",
+    "el viaje de chihiro": "spirited away", "la naranja mecanica": "a clockwork orange", "el sexto sentido": "the sixth sense",
+    "el gran dictador": "the great dictator", "tiempos modernos": "modern times", "el laberinto del fauno": "pan's labyrinth",
+    "seven": "se7en", "el pianista": "the pianist", "los intocables": "the untouchables", "intocable": "the intouchables",
+    "el gladiador": "gladiator", "la milla verde": "the green mile", "el truco final": "the prestige",
+    "malditos bastardos": "inglourious basterds", "toy story 3": "toy story 3", "monstruos sa": "monsters inc",
+    "piratas del caribe": "pirates of the caribbean the curse of the black pearl", "harry potter": "harry potter and the sorcerer's stone",
+    "el hobbit": "the hobbit an unexpected journey", "indiana jones": "raiders of the lost ark", "en busca del arca perdida": "raiders of the lost ark",
+    "el lobo de wall street": "the wolf of wall street", "atrapame si puedes": "catch me if you can", "la red social": "the social network",
+}
+
+COUNTRY_ALIASES = {
+    "espanolas": "Spain", "espanola": "Spain", "espana": "Spain", "espanoles": "Spain",
+    "francesas": "France", "francesa": "France", "francia": "France",
+    "italianas": "Italy", "italiana": "Italy", "italia": "Italy",
+    "japonesas": "Japan", "japonesa": "Japan", "japon": "Japan",
+    "alemanas": "Germany", "alemana": "Germany", "alemania": "Germany",
+    "britanicas": "UK", "britanica": "UK", "inglesas": "UK", "inglesa": "UK", "reino unido": "UK",
+    "americanas": "USA", "estadounidenses": "USA", "estados unidos": "USA", "eeuu": "USA", "hollywood": "USA",
+    "mexicanas": "Mexico", "mexicana": "Mexico", "mexico": "Mexico",
+    "coreanas": "South Korea", "coreana": "South Korea", "corea": "South Korea",
+    "indias": "India", "india": "India", "bollywood": "India",
+    "chinas": "China", "china": "China", "argentinas": "Argentina", "argentina": "Argentina",
+    "suecas": "Sweden", "suecia": "Sweden", "rusas": "Russia", "rusia": "Russia",
+    "canadienses": "Canada", "canada": "Canada", "australianas": "Australia", "australia": "Australia",
+}
+COUNTRY_ES = {"Spain": "españolas", "France": "francesas", "Italy": "italianas", "Japan": "japonesas",
+              "Germany": "alemanas", "UK": "británicas", "USA": "estadounidenses", "Mexico": "mexicanas",
+              "South Korea": "coreanas", "India": "indias", "China": "chinas", "Argentina": "argentinas",
+              "Sweden": "suecas", "Russia": "rusas", "Canada": "canadienses", "Australia": "australianas"}
 
 
 def normalize(text: str) -> str:
@@ -109,12 +153,26 @@ class MovieBot:
         # Índice de títulos (prioriza la versión con más votos si hay remakes).
         ordered = self.movies.sort_values("imdb_votes", ascending=False)
         self.title_index: dict[str, int] = {}
+        self.title_alias: dict[str, int] = {}
         for idx, t in zip(ordered.index, ordered["title_norm"]):
             self.title_index.setdefault(t, idx)
+        # Alias: "matrix" -> The Matrix, "star wars" -> Star Wars: Episode ...
+        for idx, t in zip(ordered.index, ordered["title_norm"]):
+            short = re.sub(r"^(the|a|an) ", "", t)
+            if len(short) >= 4:
+                self.title_alias.setdefault(short, idx)
+        for idx, title in zip(ordered.index, ordered["title"]):
+            if ":" in title:
+                pre = normalize(title.split(":")[0])
+                if len(pre) >= 4:
+                    self.title_alias.setdefault(pre, idx)
+                    self.title_alias.setdefault(re.sub(r"^(the|a|an) ", "", pre), idx)
         self.title_keys = sorted(self.title_index, key=len, reverse=True)
+        self.alias_keys = sorted(self.title_alias, key=len, reverse=True)
 
         self.directors = self._person_index("directors")
         self.actors = self._person_index("cast")
+        self.surnames = self._surname_index()
         self.cities = {normalize(c): c for c in self.cines["city"].dropna().unique()}
         self.states = {normalize(s): s for s in self.cines["state"].dropna().unique()}
 
@@ -124,23 +182,69 @@ class MovieBot:
         counts = names.value_counts()
         return {normalize(n): n for n in counts[counts >= 2].index}
 
-    def find_title(self, q: str) -> int | None:
+    def _surname_index(self) -> dict[str, tuple[str, str]]:
+        """Apellido -> (nombre completo, rol) del cineasta con más películas (ej. almodovar)."""
+        out: dict[str, tuple[str, str, int]] = {}
+        for column, role in (("cast", "cast"), ("directors", "directors")):
+            names = self.movies[column].dropna().str.split("|").explode().dropna()
+            for name, n in names.value_counts().items():
+                if n < 3:
+                    break
+                last = normalize(name).split()[-1] if normalize(name) else ""
+                if len(last) < 5 or last in STOPWORDS or last in GENRE_ALIASES:
+                    continue
+                bonus = 3 if role == "directors" else 0  # el director pesa más (Almodóvar, Kubrick...)
+                if last not in out or n + bonus > out[last][2]:
+                    out[last] = (name, role, n + bonus)
+        return {k: (v[0], v[1]) for k, v in out.items()}
+
+    def find_surname(self, q: str) -> tuple[str, str] | None:
+        words = [w for w in normalize(q).split()
+                 if w not in STOPWORDS and w not in GENRE_ALIASES and w not in COUNTRY_ALIASES]
+        for w in words:
+            if w in self.surnames:
+                return self.surnames[w]
+        for w in words:
+            if len(w) >= 6:
+                match = get_close_matches(w, list(self.surnames), n=1, cutoff=0.88)
+                if match:
+                    return self.surnames[match[0]]
+        return None
+
+    def find_title(self, q: str, fuzzy: bool = True) -> int | None:
         quoted = re.findall(r"[\"'“”«»](.+?)[\"'“”«»]", q)
         for cand in quoted:
             idx = self.title_index.get(normalize(cand))
             if idx is not None:
                 return idx
         nq = f" {normalize(q)} "
+        for es, en in sorted(SPANISH_TITLES.items(), key=lambda kv: -len(kv[0])):
+            if f" {es} " in nq:
+                idx = self.title_index.get(en) or self.title_alias.get(en)
+                if idx is not None:
+                    return idx
+        best: tuple[str, int] | None = None
         for key in self.title_keys:  # coincidencia exacta más larga dentro de la frase
             if len(key) < 4 and not quoted:
                 continue
             if f" {key} " in nq:
                 if key.split()[0] in STOPWORDS and len(key.split()) == 1:
                     continue
-                return self.title_index[key]
+                best = (key, self.title_index[key])
+                break
+        for key in self.alias_keys:  # "matrix", "star wars"... gana si es más larga
+            if best and len(key) <= len(best[0]):
+                break
+            if f" {key} " in nq and not (len(key.split()) == 1 and key in STOPWORDS):
+                best = (key, self.title_alias[key])
+                break
+        if best:
+            return best[1]
+        if not fuzzy:
+            return None
         # Búsqueda aproximada con lo que queda al quitar palabras de la plantilla.
         rest = " ".join(w for w in normalize(q).split()
-                        if w not in STOPWORDS and w not in GENRE_ALIASES and not w.isdigit())
+                        if w not in STOPWORDS and w not in GENRE_ALIASES and w not in COUNTRY_ALIASES and not w.isdigit())
         if len(rest) >= 4:
             match = get_close_matches(rest, self.title_keys, n=1, cutoff=0.8)
             if match:
@@ -160,6 +264,14 @@ class MovieBot:
             match = get_close_matches(rest, list(index), n=1, cutoff=0.85)
             if match:
                 return index[match[0]]
+        return None
+
+    @staticmethod
+    def find_country(q: str) -> str | None:
+        nq = f" {normalize(q)} "
+        for alias in sorted(COUNTRY_ALIASES, key=len, reverse=True):
+            if f" {alias} " in nq:
+                return COUNTRY_ALIASES[alias]
         return None
 
     @staticmethod
@@ -194,7 +306,7 @@ class MovieBot:
         return max(1, min(int(m.group(1)), 20)) if m else default
 
     # ------------------------------------------------------------ inference
-    def detect_intent(self, q: str) -> tuple[str, float]:
+    def detect_intent(self, q: str) -> tuple[str, float, bool]:
         proba = self.intent_model.predict_proba([q])[0]
         classes = self.intent_model.classes_
         best = int(np.argmax(proba))
@@ -204,35 +316,32 @@ class MovieBot:
         nq = normalize(q)
         rules = [
             (r"\b(predic|predec|predi|clasific|que categoria|segun el (modelo|random)|votan los arboles)", "predecir"),
-            (r"\bque es\b|\bexplica|\bdiferencia entre\b|\bque significa\b", "teoria"),
+            (r"\bque es\b|\bexplica|\bdiferencia entre\b|\bque significa\b|\bcomo funciona (el|la|un|una)\b", "teoria"),
             (r"\b(importan|accuracy|precision|metricas|oob score|hiperparametro|features usa|cuantos arboles)", "modelo"),
-            (r"\b(recomiend|recomienda|parecid|similar|sugier|que veo|no se que ver)", "recomendar"),
+            (r"\b(recomiend|recomienda|parecid|similar|sugier|que veo|no se que ver|algo para ver|(pelicula|peli) buena|algo bueno)", "recomendar"),
             (r"\bcines?\b", "cines"),
             (r"\bcomentad|\bcomentarios\b|\bcomenta\b", "comentarios"),
             (r"\b(dirigid|dirigio|director|directora)\b", "director"),
             (r"\b(actua|actor|actriz|protagoniz|sale |salen )", "actor"),
-            (r"\b(mejores|peores|top|ranking|mejor valorad|peor valorad|mejor puntuad|mejor pelicula)", "top_genero"),
+            (r"\b(mejores|peores|top|ranking|mejor valorad|peor valorad|mejor puntuad|mejor pelicula)"
+             r"|\bmas (larga|cort|votad|popular|famos|conocid|antigua|viej|reciente|nueva|premi)", "top_genero"),
             (r"\b(cuantas|cuantos|estadistic|media|resumen del dataset|que generos)", "estadisticas"),
         ]
         for pattern, rule_intent in rules:
             if re.search(pattern, nq):
-                if rule_intent == "teoria" and self.find_title(q) is not None and "random" not in nq:
+                if (rule_intent == "teoria" and self.find_title(q, fuzzy=False) is not None
+                        and not any(k in nq for keys, _ in KNOWLEDGE for k in keys)):
                     continue
-                return rule_intent, max(conf, 0.9) if rule_intent == intent else 0.9
-        return intent, conf
+                return rule_intent, (max(conf, 0.9) if rule_intent == intent else 0.9), True
+        return intent, conf, False
 
     def answer(self, question: str) -> dict:
         question = (question or "").strip()
         if not question:
             return {"intent": "vacío", "confidence": 1.0, "answer": "Escríbeme una pregunta sobre las películas 🎬"}
-        intent, conf = self.detect_intent(question)
-
-        # Persona citada sin intención clara -> director/actor
-        if intent in ("info_pelicula", "saludo", "despedida", "ayuda") and conf < 0.35:
-            if self.find_person(question, self.directors):
-                intent = "director"
-            elif self.find_person(question, self.actors):
-                intent = "actor"
+        intent, conf, by_rule = self.detect_intent(question)
+        if not by_rule:
+            intent = self._route_by_entities(question, intent, conf)
 
         handler = getattr(self, f"_h_{intent}", self._h_ayuda)
         result = handler(question)
@@ -241,10 +350,41 @@ class MovieBot:
         result.update({"intent": intent, "confidence": round(conf, 3)})
         return result
 
+    def _route_by_entities(self, q: str, intent: str, conf: float) -> str:
+        """Motor de inferencia: las entidades encontradas corrigen la intención del Random Forest."""
+        if intent == "saludo" and conf >= 0.7 or intent == "despedida" and conf >= 0.6:
+            return intent
+        d, a = self.find_person(q, self.directors), self.find_person(q, self.actors)
+        if d and a:
+            nd, na = self._count_person(d, "directors"), self._count_person(a, "cast")
+            return "director" if nd >= na else "actor"
+        if d:
+            return "director"
+        if a:
+            return "actor"
+        if self.find_title(q, fuzzy=False) is not None:
+            return "info_pelicula" if intent not in ("predecir", "recomendar", "comentarios") else intent
+        sur = self.find_surname(q)
+        if sur:
+            return "director" if sur[1] == "directors" else "actor"
+        if self.find_genre(q) or self.find_country(q) or self.find_years(q):
+            return intent if intent in ("estadisticas", "recomendar", "predecir", "top_genero") else "top_genero"
+        if intent in ("info_pelicula", "teoria") and self.find_title(q) is not None:
+            return "info_pelicula"
+        if (conf < 0.3 and intent not in ("despedida", "ayuda")) or (intent == "saludo" and conf < 0.7):
+            return "no_entiendo"
+        return intent
+
+    def _count_person(self, person: str, column: str) -> int:
+        return int(self.movies[column].fillna("").str.split("|").apply(lambda xs: person in xs).sum())
+
     # ------------------------------------------------------------- handlers
+    def _h_no_entiendo(self, q: str) -> str:
+        return "No te he entendido del todo 🤔. " + self._h_ayuda(q)
+
     def _h_saludo(self, q: str) -> str:
         return random.choice([
-            "¡Hola! 👋 Soy **CineForest**, una IA local entrenada con Random Forest sobre el dataset de películas mflix. Pregúntame por películas, directores, actores, rankings o pídeme que prediga la calidad de una película.",
+            "¡Hola! 👋 Soy **CineForest**, una IA entrenada con Random Forest sobre el dataset de películas mflix. Pregúntame por películas, directores, actores, rankings o pídeme que prediga la calidad de una película.",
             "¡Buenas! 🎬 Conozco más de 21.000 películas del dataset mflix. Prueba: *«mejores películas de terror de los 80»* o *«predice la calidad de Titanic»*.",
         ])
 
@@ -291,7 +431,30 @@ class MovieBot:
         if pd.notna(m["plot"]):
             lines.append(f"\n> {m['plot']}")
         lines.append(f"\n🌲 El Random Forest la clasifica como **{CATEGORY_EMOJI[pred['category']]} {pred['category']}** ({pred['confidence']:.0%} de los votos).")
-        return {"answer": "\n".join(lines), "poster": m["poster"] if pd.notna(m["poster"]) else None, "prediction": pred}
+        val = lambda x: None if pd.isna(x) else x  # noqa: E731
+        detail = {
+            "title": m["title"],
+            "year": int(m["year"]) if pd.notna(m["year"]) else None,
+            "genres": [GENRE_ES.get(g, g) for g in m["genre_list"] if g],
+            "directors": val(m["directors"]).split("|") if val(m["directors"]) else [],
+            "cast": val(m["cast"]).split("|") if val(m["cast"]) else [],
+            "runtime": int(m["runtime"]) if pd.notna(m["runtime"]) else None,
+            "rating": float(m["imdb_rating"]) if pd.notna(m["imdb_rating"]) else None,
+            "votes": int(m["imdb_votes"]) if pd.notna(m["imdb_votes"]) else None,
+            "metacritic": int(m["metacritic"]) if pd.notna(m["metacritic"]) else None,
+            "wins": int(m["wins"]), "nominations": int(m["nominations"]),
+            "comments": int(m["num_comments"]),
+            "rated": val(m["rated"]),
+            "countries": val(m["countries"]).split("|") if val(m["countries"]) else [],
+            "plot": val(m["plot"]),
+        }
+        return {"answer": "\n".join(lines), "poster": m["poster"] if pd.notna(m["poster"]) else None,
+                "prediction": pred, "detail": detail}
+
+    def poster_wall(self, n: int = 36) -> list[dict]:
+        top = self.movies[self.movies["poster"].notna() & (self.movies["type"] != "series")]
+        top = top.sort_values("imdb_votes", ascending=False).head(n)
+        return [{"title": t, "poster": p} for t, p in zip(top["title"], top["poster"])]
 
     def _h_predecir(self, q: str) -> dict | str:
         idx = self.find_title(q)
@@ -392,31 +555,86 @@ class MovieBot:
         if years:
             df = df[(df["year"] >= years[0]) & (df["year"] <= years[1])]
             desc.append(f"de {years[0]}" if years[0] == years[1] else f"de {years[0]}-{years[1]}")
+        country = self.find_country(q)
+        if country:
+            df = df[df["countries"].fillna("").str.split("|").apply(lambda cs: country in cs)]
+            desc.insert(0, COUNTRY_ES.get(country, f"de {country}"))
+        if re.search(r"\bseries?\b", normalize(q)):
+            df = df[df["type"] == "series"]
+            desc.insert(0, "·series·")
+        else:
+            df = df[df["type"] != "series"]
         return df, desc
 
     def _h_top_genero(self, q: str) -> str:
         df, desc = self._filter(q)
-        n = self.find_top_n(q, 1 if re.search(r"\b(la mejor|mejor pelicula|la peor|peor pelicula)\b", normalize(q)) else 5)
-        worst = bool(re.search(r"\b(peor|peores)\b", normalize(q)))
-        min_votes = 1000 if self.find_years(q) else (5000 if desc else 20000)
-        df = df[df["imdb_votes"] >= min_votes].dropna(subset=["imdb_rating"])
+        nq = normalize(q)
+        n = self.find_top_n(q, 1 if re.search(r"\b(la mejor|mejor pelicula|mejor peli|la peor|peor pelicula)\b", nq) else 5)
+        worst = bool(re.search(r"\b(peor|peores)\b", nq))
+        df = df.dropna(subset=["imdb_rating", "imdb_votes"])
+        df = df[df["imdb_votes"] >= (300 if len(df) < 300 else 1000)]
         if df.empty:
             return "No encuentro películas con esos filtros 🤷."
-        df = df.sort_values(["imdb_rating", "imdb_votes"], ascending=[worst, False]).head(n)
-        title = f"{'👎 Peores' if worst else '🏆 Mejores'} películas {' '.join(desc)} (nota IMDb, mínimo de votos)"
-        return title + ":\n" + "\n".join(f"{i}. {fmt_movie_line(r)}" for i, (_, r) in enumerate(df.iterrows(), 1))
+        sorts = [
+            (r"mas larga|mas largas|mas largo|dura mas", "runtime", False, "⏱️ Películas más largas", "runtime"),
+            (r"mas corta|mas cortas|dura menos", "runtime", True, "⏱️ Películas más cortas", "runtime"),
+            (r"mas votad|mas popular|mas famos|mas conocid", "imdb_votes", False, "🔥 Películas más populares", "imdb_votes"),
+            (r"mas antigua|mas vieja", "year", True, "📜 Películas más antiguas", None),
+            (r"mas reciente|mas nueva|ultimas", "year", False, "🆕 Películas más recientes", None),
+            (r"mas premi|mas oscar|mas galardon", "wins", False, "🏅 Películas con más premios", "wins"),
+        ]
+        for pattern, col, asc, label, extra in sorts:
+            if re.search(pattern, nq):
+                df = df[df["imdb_votes"] >= 2000] if col in ("year", "runtime") and len(df) > 50 else df
+                df = df.sort_values([col, "imdb_votes"], ascending=[asc, False]).head(n)
+                unit = {"runtime": " min", "imdb_votes": " votos", "wins": " premios"}
+                cards = self._cards(df, lambda r: f"{fmt_int(r[extra])}{unit[extra]}" if extra else None)
+                desc = [d for d in desc if d != "·series·"]
+                head = f"{label} {' '.join(desc)}".strip()
+                return {"answer": f"**{head}**", "movies": cards}
+        # Nota ponderada (estilo IMDb Top 250): evita que gane una película con 300 votos.
+        C, m = self.movies["imdb_rating"].mean(), 10000
+        v, R = df["imdb_votes"], df["imdb_rating"]
+        df = df.assign(score=(v / (v + m)) * R + (m / (v + m)) * C)
+        df = df.sort_values("score", ascending=worst).head(n)
+        noun = "series" if "·series·" in desc else "películas"
+        desc = [d for d in desc if d != "·series·"]
+        title = f"{'👎 Peores' if worst else '🏆 Mejores'} {noun} {' '.join(desc)}".strip()
+        return {"answer": f"**{title}**\n_Ordenadas por nota IMDb ponderada por número de votos._", "movies": self._cards(df)}
 
-    def _person_movies(self, person: str, column: str) -> str:
+    def _cards(self, df: pd.DataFrame, extra=None) -> list[dict]:
+        """Tarjetas de película para el frontend (póster, año, nota, géneros)."""
+        cards = []
+        for _, r in df.iterrows():
+            cards.append({
+                "title": r["title"],
+                "year": int(r["year"]) if pd.notna(r["year"]) else None,
+                "rating": round(float(r["imdb_rating"]), 1) if pd.notna(r["imdb_rating"]) else None,
+                "poster": r["poster"] if pd.notna(r["poster"]) else None,
+                "genres": [GENRE_ES.get(g, g) for g in r["genre_list"] if g][:2],
+                "extra": extra(r) if extra else None,
+            })
+        return cards
+
+    def _person_movies(self, person: str, column: str) -> dict:
         df = self.movies[self.movies[column].fillna("").str.split("|").apply(lambda xs: person in xs)]
-        df = df.sort_values("imdb_rating", ascending=False)
+        df = df.sort_values(["imdb_rating", "imdb_votes"], ascending=False)
         role = "dirigidas por" if column == "directors" else "con"
         avg = df["imdb_rating"].mean()
-        lines = [f"🎬 **{len(df)} películas {role} {person}** en el dataset (nota media ⭐ {avg:.1f}). Las mejor valoradas:"]
-        lines += [f"{i}. {fmt_movie_line(r)}" for i, (_, r) in enumerate(df.head(8).iterrows(), 1)]
-        return "\n".join(lines)
+        return {
+            "answer": f"🎬 **{len(df)} películas {role} {person}** en el dataset · nota media ⭐ {avg:.1f}\nLas mejor valoradas:",
+            "movies": self._cards(df.head(10)),
+        }
 
     def _h_director(self, q: str) -> str:
         person = self.find_person(q, self.directors)
+        actor = self.find_person(q, self.actors)
+        if actor and (not person or not re.search(r"dirig|director", normalize(q))
+                      and self._count_person(actor, "cast") > self._count_person(person, "directors")):
+            return self._person_movies(actor, "cast")
+        sur = self.find_surname(q)
+        if not person and sur:
+            return self._person_movies(*sur)
         if not person and self.find_title(q) is not None:
             return self._h_info_pelicula(q)
         if not person:
@@ -424,7 +642,10 @@ class MovieBot:
         return self._person_movies(person, "directors")
 
     def _h_actor(self, q: str) -> str:
-        person = self.find_person(q, self.actors)
+        person = self.find_person(q, self.actors) or self.find_person(q, self.directors)
+        sur = self.find_surname(q)
+        if not person and sur:
+            return self._person_movies(*sur)
         if not person and self.find_title(q) is not None:
             return self._h_info_pelicula(q)
         if not person:
@@ -445,16 +666,22 @@ class MovieBot:
             score = same * 0.6 + genre_sim.to_numpy() * 0.4
             cand = self.movies.assign(score=score)
             cand = cand[(cand.index != idx) & (cand["imdb_votes"] >= 1000) & (cand["title_norm"] != base["title_norm"])]
-            cand = cand.sort_values(["score", "imdb_rating"], ascending=False).head(5)
-            return (f"💡 Si te gustó **{base['title']}**, el bosque (proximidad de hojas + géneros) te recomienda:\n"
-                    + "\n".join(f"{i}. {fmt_movie_line(r)}" for i, (_, r) in enumerate(cand.iterrows(), 1)))
+            cand = cand.sort_values(["score", "imdb_rating"], ascending=False).head(8)
+            return {"answer": f"💡 Si te gustó **{base['title']}**, el bosque te recomienda:\n"
+                              f"_Similitud = proximidad en las hojas del Random Forest + géneros en común._",
+                    "movies": self._cards(cand, lambda r: f"{r['score']:.0%} similar")}
         df, desc = self._filter(q)
-        df = df[(df["imdb_rating"] >= 7.5) & (df["imdb_votes"] >= 5000)]
+        df = df[(df["imdb_rating"] >= 7.3) & (df["imdb_votes"] >= 20000)]
+        if len(df) < 5:
+            df, desc = self._filter(q)
+            df = df[(df["imdb_rating"] >= 7.0) & (df["imdb_votes"] >= 2000)]
         if df.empty:
             return "No tengo recomendaciones con esos filtros."
-        picks = df.sample(min(5, len(df)), random_state=random.randint(0, 9999)).sort_values("imdb_rating", ascending=False)
-        return (f"💡 Te recomiendo estas películas {' '.join(desc)} (nota ≥ 7.5):\n"
-                + "\n".join(f"{i}. {fmt_movie_line(r)}" for i, (_, r) in enumerate(picks.iterrows(), 1)))
+        picks = df.sample(min(6, len(df)), random_state=random.randint(0, 9999)).sort_values("imdb_rating", ascending=False)
+        desc = [d for d in desc if d != "·series·"]
+        head = f"Te recomiendo estas películas {' '.join(desc)}".strip()
+        return {"answer": f"💡 **{head}**\n_Pídemelo otra vez y te saco otras distintas._",
+                "movies": self._cards(picks)}
 
     def _h_estadisticas(self, q: str) -> str:
         nq = normalize(q)
@@ -493,8 +720,9 @@ class MovieBot:
         if re.search(r"usuario|quien", nq):
             top = self.top_users.head(5)
             return "💬 **Usuarios que más comentan:**\n" + "\n".join(f"{i}. {r['name']} — {r['comments']} comentarios" for i, (_, r) in enumerate(top.iterrows(), 1))
-        df = self.movies.sort_values("num_comments", ascending=False).head(5)
-        return "💬 **Películas más comentadas:**\n" + "\n".join(f"{i}. {fmt_movie_line(r)} — {r['num_comments']} comentarios" for i, (_, r) in enumerate(df.iterrows(), 1))
+        df = self.movies.sort_values("num_comments", ascending=False).head(8)
+        return {"answer": "💬 **Películas más comentadas en mflix**",
+                "movies": self._cards(df, lambda r: f"{r['num_comments']} comentarios")}
 
     def _h_cines(self, q: str) -> str:
         nq = f" {normalize(q)} "

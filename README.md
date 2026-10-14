@@ -1,6 +1,6 @@
 # 🌲 CineForest: chatbot de películas con Random Forest
 
-Práctica de **Árboles de Decisión, Random Forest y Sistemas Expertos**. Es una IA **local** (sin LLM ni APIs externas), entrenada con scikit-learn sobre el dataset **MongoDB sample_mflix**: películas, comentarios, usuarios y cines. Se le hacen preguntas desde un chatbot web.
+Práctica de **Árboles de Decisión, Random Forest y Sistemas Expertos**. Es una IA propia, sin LLM ni APIs externas,, entrenada con scikit-learn sobre el dataset **MongoDB sample_mflix**: películas, comentarios, usuarios y cines. Se le hacen preguntas desde un chatbot web.
 
 - **Frontend (GitHub Pages)**: `docs/`. HTML, CSS y JS estático.
 - **Backend (Render)**: `backend/`. API FastAPI que carga `modelo.joblib`.
@@ -49,7 +49,7 @@ Es la arquitectura desacoplada de producción que se explica en clase: un fronte
 - *Cuántas películas de comedia hay* / *Película más comentada* / *Cines en California*
 - *Qué variables son más importantes* / *Qué es el bagging*
 
-## 3) Entrenar en local
+## 3) Reentrenar el modelo
 
 ```powershell
 python -m venv .venv
@@ -58,10 +58,9 @@ pip install -r backend\requirements.txt
 # Descomprime archive.zip en la carpeta data\ (mflix.movies.csv, mflix.comments.csv, ...)
 cd backend
 python train.py --data-dir ..\data
-uvicorn app:app --reload --port 8000
 ```
 
-Para abrir el frontend en local: `docs/index.html?api=http://localhost:8000`.
+Después haz `git push`: Render vuelve a desplegar la API con el modelo nuevo.
 
 ## 4) Despliegue
 
