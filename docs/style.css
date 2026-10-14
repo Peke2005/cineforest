@@ -50,7 +50,7 @@ code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: .86
   transition: opacity 1.2s ease;
   filter: saturate(.9);
 }
-.wall.ready { opacity: .32; }
+.wall.ready { opacity: .42; }
 .wall img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; background: #1a1d24; }
 .wall .col { display: grid; gap: 14px; animation: drift 60s linear infinite alternate; }
 .wall .col:nth-child(even) { animation-direction: alternate-reverse; transform: translateY(-80px); }
@@ -122,7 +122,7 @@ body.chatting .hero { display: none; }
 
 .starters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; }
 .starter {
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left;
   padding: 16px; border-radius: var(--radius); cursor: pointer;
   background: var(--surface); border: 1px solid var(--line);
   backdrop-filter: blur(14px);
@@ -137,7 +137,7 @@ body.chatting .hero { display: none; }
 
 /* ---------- Conversación ---------- */
 .thread { display: flex; flex-direction: column; gap: 26px; padding-top: 18px; }
-.msg { display: flex; gap: 14px; animation: rise .35s ease both; }
+.msg { display: flex; gap: 14px; animation: rise .35s ease both; scroll-margin-top: 84px; }
 .msg--user { justify-content: flex-end; }
 .msg--user .bubble {
   max-width: min(560px, 85%);
@@ -189,14 +189,16 @@ body.chatting .hero { display: none; }
   transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
 }
 .card:hover .card__poster { transform: translateY(-4px) scale(1.02); box-shadow: var(--shadow); border-color: rgba(61, 220, 132, .55); }
-.card__poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card__poster img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
 .card__poster .ph { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; font: 600 13px "Sora", sans-serif; color: var(--muted); }
 .card__rank {
+  z-index: 2;
   position: absolute; top: 8px; left: 8px;
   width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
   font: 700 12.5px "Sora", sans-serif; background: rgba(7, 8, 11, .78); backdrop-filter: blur(6px); border: 1px solid var(--line-strong);
 }
 .card__rating {
+  z-index: 2;
   position: absolute; bottom: 8px; left: 8px;
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 8px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
@@ -323,14 +325,16 @@ body:not(.chatting) .quick { display: none; }
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {
   .starters { grid-template-columns: 1fr 1fr; }
-  .film { grid-template-columns: 1fr; padding: 14px; }
-  .film__poster { width: 150px; }
   .btn-ghost span { display: none; }
   .btn-ghost { padding: 9px; }
   .pill span { display: none; }
   .wall { grid-template-columns: repeat(5, 1fr); }
   .carousel { grid-auto-columns: 128px; }
   .avatar { display: none; }
+}
+@media (max-width: 560px) {
+  .film { grid-template-columns: 1fr; padding: 14px; }
+  .film__poster { width: 150px; }
 }
 @media (max-width: 420px) {
   .starters { grid-template-columns: 1fr; }
