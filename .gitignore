@@ -1,0 +1,23 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Caché Python
+__pycache__/
+*.pyc
+
+# Dataset original (pesado): se descomprime de archive.zip en data/
+data/
+*.zip
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Variables de entorno
+.env
+
+# Material de clase
+*.pdf

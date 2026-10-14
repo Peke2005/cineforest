@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CineForest · Chatbot de películas</title>
+  <meta name="description" content="Chatbot con IA local (Random Forest) entrenada con el dataset de películas mflix.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌲</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo">🌲</span>
+        <div>
+          <h1>CineForest</h1>
+          <p>IA local · Random Forest · mflix</p>
+        </div>
+      </div>
+
+      <section class="card">
+        <h2>Estado del servidor</h2>
+        <p id="status" class="status status--loading">Conectando con Render…</p>
+      </section>
+
+      <section class="card">
+        <h2>Modelo</h2>
+        <div class="metrics">
+          <div><span id="m-rf">–</span><small>Accuracy bosque</small></div>
+          <div><span id="m-oob">–</span><small>OOB score</small></div>
+          <div><span id="m-dt">–</span><small>Accuracy árbol</small></div>
+          <div><span id="m-trees">–</span><small>Árboles</small></div>
+        </div>
+        <h3>Variables más importantes</h3>
+        <ul id="importances" class="bars"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Dataset</h2>
+        <ul id="stats" class="stats"></ul>
+      </section>
+
+      <p class="foot">Árbol de Decisión + Random Forest (scikit-learn) · API FastAPI en Render · Frontend en GitHub Pages</p>
+    </aside>
+
+    <main class="chat">
+      <header class="chat__header">
+        <div>
+          <h2>Pregunta lo que quieras sobre el dataset de películas</h2>
+          <p>Sin LLM: un Random Forest detecta tu intención y un sistema experto consulta las 20.000 películas o predice su calidad.</p>
+        </div>
+      </header>
+
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <div class="chips" id="chips"></div>
+
+      <form id="form" class="composer">
+        <input id="input" type="text" autocomplete="off" maxlength="500" placeholder="Ej.: predice la calidad de Inception" aria-label="Mensaje">
+        <button type="submit" id="send">Enviar</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
